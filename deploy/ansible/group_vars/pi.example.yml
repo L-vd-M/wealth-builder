@@ -1,0 +1,23 @@
+deploy_user: "{{ ansible_user | default('pi') }}"
+home_dir: "/home/{{ deploy_user }}"
+app_root: "{{ home_dir }}/wealth-builder"
+repo_url: "CHANGE_ME_REPO_URL"
+repo_version: "main"
+agent_templates_repo_url: "https://github.com/L-vd-M/project-agent-templates.git"
+agent_templates_version: "main"
+
+deploy_stack: true
+
+postgres_user: mcuser
+postgres_password: "CHANGE_ME_POSTGRES_PASSWORD"
+clerk_jwks_url: "CHANGE_ME_CLERK_JWKS_URL"
+allowed_origins: "CHANGE_ME_ALLOWED_ORIGINS"
+cloudflare_tunnel_token: "CHANGE_ME_CLOUDFLARE_TUNNEL_TOKEN"
+encryption_key: "CHANGE_ME_ENCRYPTION_KEY"
+frontend_url: "CHANGE_ME_FRONTEND_URL"
+
+openai_api_key: ""
+resend_api_key: ""
+resend_from_email: "notifications@yourdomain.com"
+internal_api_base: "http://localhost:8000"
+agent_templates_path: "/opt/project-agent-templates"

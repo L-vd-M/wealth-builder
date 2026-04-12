@@ -34,3 +34,29 @@ export async function postJson<T, P>(path: string, payload: P, fallback: T, toke
     return fallback;
   }
 }
+
+export async function patchJson<T, P>(path: string, payload: P, fallback: T, token?: string): Promise<T> {
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) return fallback;
+    return (await response.json()) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function deleteRequest(path: string, token?: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    });
+    return response.ok || response.status === 204;
+  } catch {
+    return false;
+  }
+}

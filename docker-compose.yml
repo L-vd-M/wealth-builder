@@ -1,4 +1,4 @@
-# MarketCommand — Raspberry Pi production stack
+# Wealth Builder — Raspberry Pi production stack
 # Usage: docker compose up -d --build
 
 services:
@@ -32,7 +32,12 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-notifications@marketcommand.app}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-notifications@yourdomain.com}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      AGENT_TEMPLATES_PATH: ${AGENT_TEMPLATES_PATH:-/opt/project-agent-templates}
+      INTERNAL_API_BASE: ${INTERNAL_API_BASE:-http://localhost:8000}
+    volumes:
+      - ./project-agent-templates:/opt/project-agent-templates:ro
     ports:
       - "127.0.0.1:8000:8000"   # only reachable via nginx / cloudflared
 

@@ -1,0 +1,76 @@
+---
+- name: Configure Wealth Builder Raspberry Pi
+  hosts: pi
+  become: true
+  vars_files:
+    - group_vars/pi.yml
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - git
+          - curl
+          - ca-certificates
+          - python3
+          - python3-pip
+          - python3-venv
+          - docker.io
+          - docker-compose-plugin
+        state: present
+
+    - name: Enable and start Docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Add deploy user to docker group
+      ansible.builtin.user:
+        name: "{{ deploy_user }}"
+        groups: docker
+        append: true
+
+    - name: Ensure app root exists
+      ansible.builtin.file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
+    - name: Clone wealth-builder repository
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_root }}"
+        version: "{{ repo_version }}"
+        update: true
+      become_user: "{{ deploy_user }}"
+
+    - name: Clone project-agent-templates repository
+      ansible.builtin.git:
+        repo: "{{ agent_templates_repo_url }}"
+        dest: "{{ app_root }}/project-agent-templates"
+        version: "{{ agent_templates_version }}"
+        update: true
+      become_user: "{{ deploy_user }}"
+
+    - name: Render root environment file
+      ansible.builtin.template:
+        src: templates/wealth-builder.env.j2
+        dest: "{{ app_root }}/.env"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0600"
+
+    - name: Build and start Docker stack
+      ansible.builtin.command:
+        cmd: docker compose up -d --build
+        chdir: "{{ app_root }}"
+      when: deploy_stack | bool
+      become_user: "{{ deploy_user }}"

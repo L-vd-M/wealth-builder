@@ -11,6 +11,10 @@ const links = [
   ["/news", "News"],
   ["/bots-strategies", "Bots & Strategies"],
   ["/ai-agents", "AI Agents"],
+  ["/agents", "Agent Catalogue"],
+  ["/deliberations", "Deliberations"],
+  ["/wallets", "Wallets"],
+  ["/scheduler", "Scheduler"],
 ] as const;
 
 export function Nav() {
@@ -19,7 +23,7 @@ export function Nav() {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-terminal-accent">MarketCommand</h2>
       <nav className="flex flex-col gap-2 text-sm">
         {links.map(([href, label]) => (
-          <Link key={href} className="rounded px-2 py-1 hover:bg-terminal-border" href={href}>
+          <Link key={href} className="rounded px-2 py-1 hover:bg-terminal-border" href={href as never}>
             {label}
           </Link>
         ))}
