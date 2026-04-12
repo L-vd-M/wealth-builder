@@ -31,6 +31,79 @@ This document is the environment and service checklist for local development, Ve
 - Raspberry Pi setup reference: `docs/raspberry-pi-setup.md`
 - Ansible setup reference: `deploy/ansible/README.md`
 
+## Things to setup: Trading platform registrations
+
+Before linking wallets in the app, register API access on each platform you plan to use.
+
+### Alpaca
+
+- Register: https://alpaca.markets/
+- Create API keys (Paper or Live).
+- In app wallet form:
+	- `api_key` = Alpaca Key ID
+	- `api_secret` = Alpaca Secret Key
+
+### Binance
+
+- Register: https://www.binance.com/
+- Enable API Management and create API key.
+- Give read permissions for account/balances.
+- In app wallet form:
+	- `api_key` = Binance API Key
+	- `api_secret` = Binance Secret
+
+### Coinbase (Exchange API flow)
+
+- Register: https://www.coinbase.com/ and enable Coinbase Exchange API access.
+- Create API key + secret + passphrase.
+- In app wallet form:
+	- `api_key` = Coinbase Key
+	- `api_secret` = Coinbase Secret (base64)
+	- `Coinbase Passphrase` = API passphrase
+
+### Kraken
+
+- Register: https://www.kraken.com/
+- Create API key and private key.
+- In app wallet form:
+	- `api_key` = Kraken API key
+	- `api_secret` = Kraken private key (base64)
+
+### Luno
+
+- Register: https://www.luno.com/
+- Create API key + secret.
+- In app wallet form:
+	- `api_key` = Luno key
+	- `api_secret` = Luno secret
+
+### VALR
+
+- Register: https://www.valr.com/
+- Create API key + secret.
+- In app wallet form:
+	- `api_key` = VALR key
+	- `api_secret` = VALR secret
+
+### OANDA
+
+- Register: https://www.oanda.com/
+- Create API token.
+- In app wallet form:
+	- `api_key` = OANDA token
+	- `api_secret` can be left empty
+
+### Interactive Brokers (IBKR)
+
+- Register: https://www.interactivebrokers.com/
+- Install and run IBKR Client Portal Gateway (or equivalent API gateway).
+- Ensure your gateway exposes endpoints under `https://localhost:5000/v1/api` or your custom base URL.
+- In app wallet form:
+	- `api_key` = optional bearer token (or leave blank and use IBKR token field)
+	- `IBKR Gateway Base URL` = gateway URL
+	- `IBKR Bearer Token` = optional bearer token
+	- `IBKR Account ID` = optional specific account; if omitted, first account is used
+
 ## Required Pi values
 
 Fill these before running the production stack:

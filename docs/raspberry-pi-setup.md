@@ -149,6 +149,25 @@ Also set the Clerk frontend variables in Vercel.
 - `INTERNAL_API_BASE`: used by scheduled cron jobs when they call internal routes
 - `OPENAI_API_KEY`: enables live agent deliberation responses instead of mock responses
 
+## Trading platform registration prerequisites
+
+You must register and generate API credentials on each platform before linking it in the app.
+
+- Alpaca: create Key ID and Secret Key at https://alpaca.markets/
+- Binance: create API key and secret at https://www.binance.com/ (read permission required)
+- Coinbase: create key, secret, and passphrase in Coinbase Exchange API settings
+- Kraken: create API key and private key (base64)
+- Luno: create API key and secret
+- VALR: create API key and secret
+- OANDA: create API token
+- IBKR: run IBKR Client Portal Gateway and provide base URL plus optional bearer token/account id
+
+In-wallet field mapping:
+
+- `api_key` and `api_secret` are used by all supported exchanges.
+- Coinbase additionally requires passphrase in the wallet form.
+- IBKR additionally requires gateway base URL and optional token/account id.
+
 ## Updating after deployment
 
 ```bash

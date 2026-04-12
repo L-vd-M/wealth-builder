@@ -14,9 +14,9 @@ Endpoints:
 """
 import hashlib
 import hmac
+import json
 import logging
 import time
-import urllib.parse
 from datetime import datetime, timezone
 
 import httpx
@@ -45,7 +45,13 @@ class AccountCreate(BaseModel):
     nickname: str = Field(..., max_length=255)
     api_key: str = Field(..., description="API key — stored encrypted")
     api_secret: str | None = Field(None, description="API secret — stored encrypted")
-    extra: dict | None = Field(None, description="Extra fields (e.g. passphrase for Coinbase)")
+    extra: dict | None = Field(
+        None,
+        description=(
+            "Extra fields. Coinbase: {passphrase}. "
+            "IBKR: {base_url, token, account_id}."
+        ),
+    )
 
 
 class AccountOut(BaseModel):
@@ -155,7 +161,6 @@ async def _fetch_luno(api_key: str, api_secret: str) -> list[BalanceEntry]:
 
 
 async def _fetch_valr(api_key: str, api_secret: str) -> list[BalanceEntry]:
-    import base64
     timestamp = str(int(time.time() * 1000))
     path = "/v1/account/balances"
     verb = "GET"
@@ -182,6 +187,122 @@ async def _fetch_valr(api_key: str, api_secret: str) -> list[BalanceEntry]:
             for item in data
             if float(item.get("total", 0)) > 0
         ]
+
+
+async def _fetch_coinbase(api_key: str, api_secret: str, extra: dict | None = None) -> list[BalanceEntry]:
+    """Coinbase Exchange private API balance fetch.
+
+    Required:
+      - api_key
+      - api_secret (base64 encoded)
+      - extra.passphrase
+    """
+    import base64
+
+    passphrase = (extra or {}).get("passphrase")
+    if not passphrase:
+        raise ValueError("Coinbase requires extra.passphrase")
+
+    timestamp = str(time.time())
+    method = "GET"
+    request_path = "/accounts"
+    body = ""
+    message = f"{timestamp}{method}{request_path}{body}".encode()
+
+    try:
+        secret = base64.b64decode(api_secret)
+    except Exception as exc:
+        raise ValueError("Coinbase api_secret must be base64 encoded") from exc
+
+    signature = hmac.new(secret, message, hashlib.sha256).digest()
+    signature_b64 = base64.b64encode(signature).decode()
+
+    headers = {
+        "CB-ACCESS-KEY": api_key,
+        "CB-ACCESS-SIGN": signature_b64,
+        "CB-ACCESS-TIMESTAMP": timestamp,
+        "CB-ACCESS-PASSPHRASE": passphrase,
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(f"https://api.exchange.coinbase.com{request_path}", headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        return [
+            BalanceEntry(
+                asset=row.get("currency", "UNKNOWN"),
+                available=float(row.get("available", 0)),
+                total=float(row.get("balance", 0)),
+            )
+            for row in data
+            if float(row.get("balance", 0)) > 0
+        ]
+
+
+async def _fetch_ibkr(api_key: str, api_secret: str, extra: dict | None = None) -> list[BalanceEntry]:
+    """IBKR Client Portal gateway balance fetch.
+
+    This integration expects the user to run IBKR Client Portal Gateway and provide:
+      extra.base_url   (default: https://localhost:5000/v1/api)
+      extra.token      (Bearer token, optional if gateway already authenticated)
+      extra.account_id (optional; first account will be used if omitted)
+
+    The api_key/api_secret fields are retained for schema consistency and can be
+    used by future IBKR auth flows. Current flow reads token from extra.
+    """
+    cfg = extra or {}
+    base_url = cfg.get("base_url", "https://localhost:5000/v1/api").rstrip("/")
+    bearer = cfg.get("token") or api_key
+
+    headers = {}
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+
+    # Client Portal Gateway commonly uses self-signed certs on localhost.
+    verify_tls = not base_url.startswith("https://localhost")
+
+    async with httpx.AsyncClient(timeout=20, verify=verify_tls) as client:
+        r_accounts = await client.get(f"{base_url}/portfolio/accounts", headers=headers)
+        r_accounts.raise_for_status()
+        accounts = r_accounts.json()
+        if not accounts:
+            return []
+
+        account_id = cfg.get("account_id")
+        if not account_id:
+            first = accounts[0]
+            account_id = first.get("id") or first.get("accountId") or first.get("acctId")
+        if not account_id:
+            raise ValueError("Unable to resolve IBKR account_id")
+
+        r_ledger = await client.get(f"{base_url}/portfolio/{account_id}/ledger", headers=headers)
+        r_ledger.raise_for_status()
+        ledger = r_ledger.json()
+
+        entries: list[BalanceEntry] = []
+        for currency, payload in ledger.items():
+            if not isinstance(payload, dict):
+                continue
+            total = payload.get("cashbalance")
+            if total is None:
+                total = payload.get("netliquidationvalue")
+            if total is None:
+                continue
+            total_f = float(total)
+            if total_f <= 0:
+                continue
+            available = payload.get("settledcash")
+            if available is None:
+                available = total_f
+            entries.append(
+                BalanceEntry(
+                    asset=currency,
+                    available=float(available),
+                    total=total_f,
+                )
+            )
+
+        return entries
 
 
 async def _fetch_oanda(api_key: str, **_) -> list[BalanceEntry]:
@@ -215,6 +336,8 @@ async def _platform_not_supported(platform: str, **_) -> list[BalanceEntry]:
 _FETCHERS = {
     "alpaca": _fetch_alpaca,
     "binance": _fetch_binance,
+    "coinbase": _fetch_coinbase,
+    "ibkr": _fetch_ibkr,
     "kraken": _fetch_kraken,
     "luno": _fetch_luno,
     "valr": _fetch_valr,
@@ -228,6 +351,7 @@ async def _fetch_balance(account: LinkedAccount) -> AccountBalance:
     try:
         api_key = decrypt(account.api_key_enc)
         api_secret = decrypt(account.api_secret_enc) if account.api_secret_enc else ""
+        extra = json.loads(decrypt(account.extra_enc)) if account.extra_enc else None
         fetcher = _FETCHERS.get(platform)
         if not fetcher:
             return AccountBalance(
@@ -238,7 +362,7 @@ async def _fetch_balance(account: LinkedAccount) -> AccountBalance:
                 error=f"Balance fetching not yet supported for {platform}",
                 fetched_at=fetched_at,
             )
-        balances = await fetcher(api_key, api_secret)
+        balances = await fetcher(api_key, api_secret, extra)
         return AccountBalance(
             account_id=account.id,
             platform=platform,
@@ -282,7 +406,6 @@ async def link_account(
             status_code=400,
             detail=f"Unsupported platform. Supported: {', '.join(_SUPPORTED_PLATFORMS)}",
         )
-    import json
     account = LinkedAccount(
         user_id=user_id,
         platform=body.platform,

@@ -41,7 +41,16 @@ const platformMeta: Record<string, { label: string; color: string; needsSecret: 
   valr: { label: "VALR", color: "text-sky-400", needsSecret: true, secretLabel: "API Secret" },
 };
 
-const emptyForm = { platform: "alpaca", nickname: "", api_key: "", api_secret: "" };
+const emptyForm = {
+  platform: "alpaca",
+  nickname: "",
+  api_key: "",
+  api_secret: "",
+  coinbase_passphrase: "",
+  ibkr_base_url: "https://localhost:5000/v1/api",
+  ibkr_token: "",
+  ibkr_account_id: "",
+};
 
 export default function WalletsPage() {
   const { getToken } = useAuth();
@@ -63,7 +72,23 @@ export default function WalletsPage() {
   const link = async () => {
     if (!form.nickname || !form.api_key) { setStatus("Nickname and API key are required."); return; }
     const token = (await getToken()) ?? undefined;
-    const result = await postJson<Account, typeof form>("/wallets/accounts", form, null as unknown as Account, token);
+    const extra: Record<string, string> = {};
+    if (form.platform === "coinbase" && form.coinbase_passphrase) {
+      extra.passphrase = form.coinbase_passphrase;
+    }
+    if (form.platform === "ibkr") {
+      if (form.ibkr_base_url) extra.base_url = form.ibkr_base_url;
+      if (form.ibkr_token) extra.token = form.ibkr_token;
+      if (form.ibkr_account_id) extra.account_id = form.ibkr_account_id;
+    }
+    const payload = {
+      platform: form.platform,
+      nickname: form.nickname,
+      api_key: form.api_key,
+      api_secret: form.api_secret || null,
+      extra: Object.keys(extra).length ? extra : null,
+    };
+    const result = await postJson<Account, typeof payload>("/wallets/accounts", payload, null as unknown as Account, token);
     if (result?.id) {
       setStatus(`"${result.nickname}" linked successfully.`);
       setForm({ ...emptyForm });
@@ -175,6 +200,50 @@ export default function WalletsPage() {
                   onChange={(e) => setForm({ ...form, api_secret: e.target.value })}
                 />
               </div>
+            )}
+
+            {form.platform === "coinbase" && (
+              <div className="flex flex-col gap-1 col-span-2">
+                <label className="text-xs text-slate-400">Coinbase Passphrase</label>
+                <input
+                  type="password"
+                  className="rounded bg-terminal-border px-2 py-1 font-mono text-sm text-white"
+                  value={form.coinbase_passphrase}
+                  onChange={(e) => setForm({ ...form, coinbase_passphrase: e.target.value })}
+                />
+              </div>
+            )}
+
+            {form.platform === "ibkr" && (
+              <>
+                <div className="flex flex-col gap-1 col-span-2">
+                  <label className="text-xs text-slate-400">IBKR Gateway Base URL</label>
+                  <input
+                    className="rounded bg-terminal-border px-2 py-1 font-mono text-sm text-white"
+                    value={form.ibkr_base_url}
+                    onChange={(e) => setForm({ ...form, ibkr_base_url: e.target.value })}
+                    placeholder="https://localhost:5000/v1/api"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400">IBKR Bearer Token (optional)</label>
+                  <input
+                    type="password"
+                    className="rounded bg-terminal-border px-2 py-1 font-mono text-sm text-white"
+                    value={form.ibkr_token}
+                    onChange={(e) => setForm({ ...form, ibkr_token: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-400">IBKR Account ID (optional)</label>
+                  <input
+                    className="rounded bg-terminal-border px-2 py-1 font-mono text-sm text-white"
+                    value={form.ibkr_account_id}
+                    onChange={(e) => setForm({ ...form, ibkr_account_id: e.target.value })}
+                    placeholder="U1234567"
+                  />
+                </div>
+              </>
             )}
           </div>
           <p className="mt-2 text-[11px] text-slate-500">
