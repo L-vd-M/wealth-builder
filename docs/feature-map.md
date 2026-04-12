@@ -54,5 +54,9 @@
 - Agent verification endpoint for trades (`/strategies/verify-trade`)
 - Whale-copy plan endpoint with research gate (`/strategies/whale-copy/plan`)
 - Fixed-dollar trailing stop endpoint (`/strategies/trailing-stop`)
+- Historical OHLCV ingestion endpoint (`/strategies/historical/ingest`)
 - Backtest runs persisted to database (`backtest_runs`)
 - Historical market bars persisted for backtests (`historical_prices`)
+
+## Strategy Documentation
+- Implemented strategies reference (`docs/implemented-strategies.md`)
