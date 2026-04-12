@@ -9,6 +9,10 @@
 - Factor dashboard (momentum, volatility, carry)
 - Screening and ranking tables
 - Correlation and regime blocks
+- Predefined quant strategies catalogue
+- Agent-based trade verification panel
+- Whale-copy verified strategy visibility
+- Fixed-$5 trailing stop strategy visibility
 
 ## Financial Analysis Page
 - Company/asset fundamentals
@@ -34,9 +38,21 @@
 - Bot inventory and status
 - Strategy library and performance summaries
 - Deployment and monitoring placeholders
+- Backtest execution against persisted historical data
+- Strategy templates including whale-copy verification flow
+- Trailing stop strategy simulation and rules
 
 ## AI Agents Console Page
 - Chat with quant/trading assistants
 - Strategy-to-spec generation
 - Plot/overlay request panel
 - Code/action proposal stream
+- Research-agent verification support for trade approval workflows
+
+## Strategy API Layer
+- Predefined quant strategies endpoint (`/strategies/predefined`)
+- Agent verification endpoint for trades (`/strategies/verify-trade`)
+- Whale-copy plan endpoint with research gate (`/strategies/whale-copy/plan`)
+- Fixed-dollar trailing stop endpoint (`/strategies/trailing-stop`)
+- Backtest runs persisted to database (`backtest_runs`)
+- Historical market bars persisted for backtests (`historical_prices`)

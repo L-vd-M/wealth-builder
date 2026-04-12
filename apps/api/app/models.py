@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -172,3 +172,50 @@ class LinkedAccount(Base):
         default=lambda: datetime.now(timezone.utc),
     )
     last_synced: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Quant historical data + backtest runs
+# ---------------------------------------------------------------------------
+
+class HistoricalPrice(Base):
+    __tablename__ = "historical_prices"
+    __table_args__ = (
+        UniqueConstraint("symbol", "timeframe", "t", name="uq_symbol_timeframe_t"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    timeframe: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    t: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    o: Mapped[float] = mapped_column(Float, nullable=False)
+    h: Mapped[float] = mapped_column(Float, nullable=False)
+    l: Mapped[float] = mapped_column(Float, nullable=False)
+    c: Mapped[float] = mapped_column(Float, nullable=False)
+    v: Mapped[float] = mapped_column(Float, nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="synthetic")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class BacktestRun(Base):
+    __tablename__ = "backtest_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    strategy_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    timeframe: Mapped[str] = mapped_column(String(20), nullable=False)
+    lookback_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    cagr: Mapped[float] = mapped_column(Float, nullable=False)
+    sharpe: Mapped[float] = mapped_column(Float, nullable=False)
+    max_drawdown: Mapped[float] = mapped_column(Float, nullable=False)
+    win_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    trades: Mapped[int] = mapped_column(Integer, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )

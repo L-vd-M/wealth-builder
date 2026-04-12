@@ -6,6 +6,7 @@ The ENCRYPTION_KEY environment variable must be set (see apps/api/app/crypto.py)
 Supported platforms: alpaca, binance, coinbase, kraken, oanda, luno, valr, ibkr
 
 Endpoints:
+    POST /wallets/validate               — validate platform credentials without saving
   GET  /wallets/accounts               — list linked accounts
   POST /wallets/accounts               — link a new account
   DELETE /wallets/accounts/{id}        — unlink an account
@@ -81,11 +82,33 @@ class AccountBalance(BaseModel):
     fetched_at: str
 
 
+class AccountValidate(BaseModel):
+    platform: str = Field(..., description="Platform slug, e.g. alpaca")
+    api_key: str = Field(..., description="API key or token")
+    api_secret: str | None = Field(None, description="API secret when required")
+    extra: dict | None = Field(
+        None,
+        description=(
+            "Extra fields. Coinbase: {passphrase}. "
+            "IBKR: {base_url, token, account_id}."
+        ),
+    )
+
+
+class AccountValidationResult(BaseModel):
+    platform: str
+    valid: bool
+    message: str
+    balance_count: int = 0
+    sample_assets: list[str] = []
+    checked_at: str
+
+
 # ---------------------------------------------------------------------------
 # Balance fetchers per platform
 # ---------------------------------------------------------------------------
 
-async def _fetch_alpaca(api_key: str, api_secret: str) -> list[BalanceEntry]:
+async def _fetch_alpaca(api_key: str, api_secret: str, extra: dict | None = None) -> list[BalanceEntry]:
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.get(
             "https://api.alpaca.markets/v2/account",
@@ -100,7 +123,7 @@ async def _fetch_alpaca(api_key: str, api_secret: str) -> list[BalanceEntry]:
         ]
 
 
-async def _fetch_binance(api_key: str, api_secret: str) -> list[BalanceEntry]:
+async def _fetch_binance(api_key: str, api_secret: str, extra: dict | None = None) -> list[BalanceEntry]:
     timestamp = int(time.time() * 1000)
     params = f"timestamp={timestamp}"
     sig = hmac.new(api_secret.encode(), params.encode(), hashlib.sha256).hexdigest()
@@ -119,7 +142,7 @@ async def _fetch_binance(api_key: str, api_secret: str) -> list[BalanceEntry]:
         return entries
 
 
-async def _fetch_kraken(api_key: str, api_secret: str) -> list[BalanceEntry]:
+async def _fetch_kraken(api_key: str, api_secret: str, extra: dict | None = None) -> list[BalanceEntry]:
     import base64
     import hashlib
     nonce = str(int(time.time() * 1000))
@@ -144,7 +167,7 @@ async def _fetch_kraken(api_key: str, api_secret: str) -> list[BalanceEntry]:
         ]
 
 
-async def _fetch_luno(api_key: str, api_secret: str) -> list[BalanceEntry]:
+async def _fetch_luno(api_key: str, api_secret: str, extra: dict | None = None) -> list[BalanceEntry]:
     async with httpx.AsyncClient(timeout=15, auth=(api_key, api_secret)) as client:
         r = await client.get("https://api.luno.com/api/1/balance")
         r.raise_for_status()
@@ -160,7 +183,7 @@ async def _fetch_luno(api_key: str, api_secret: str) -> list[BalanceEntry]:
         ]
 
 
-async def _fetch_valr(api_key: str, api_secret: str) -> list[BalanceEntry]:
+async def _fetch_valr(api_key: str, api_secret: str, extra: dict | None = None) -> list[BalanceEntry]:
     timestamp = str(int(time.time() * 1000))
     path = "/v1/account/balances"
     verb = "GET"
@@ -305,7 +328,7 @@ async def _fetch_ibkr(api_key: str, api_secret: str, extra: dict | None = None) 
         return entries
 
 
-async def _fetch_oanda(api_key: str, **_) -> list[BalanceEntry]:
+async def _fetch_oanda(api_key: str, api_secret: str = "", extra: dict | None = None) -> list[BalanceEntry]:
     """OANDA uses a single Bearer token (no secret). Fetches first account balance."""
     async with httpx.AsyncClient(timeout=15) as client:
         # Get list of accounts first
@@ -343,6 +366,42 @@ _FETCHERS = {
     "valr": _fetch_valr,
     "oanda": _fetch_oanda,
 }
+
+
+async def _validate_credentials(
+    platform: str,
+    api_key: str,
+    api_secret: str,
+    extra: dict | None,
+) -> AccountValidationResult:
+    checked_at = datetime.now(timezone.utc).isoformat()
+    fetcher = _FETCHERS.get(platform)
+    if not fetcher:
+        return AccountValidationResult(
+            platform=platform,
+            valid=False,
+            message=f"Unsupported platform. Supported: {', '.join(_SUPPORTED_PLATFORMS)}",
+            checked_at=checked_at,
+        )
+
+    try:
+        balances = await fetcher(api_key, api_secret, extra)
+        sample_assets = [b.asset for b in balances[:5]]
+        return AccountValidationResult(
+            platform=platform,
+            valid=True,
+            message="Credentials validated successfully",
+            balance_count=len(balances),
+            sample_assets=sample_assets,
+            checked_at=checked_at,
+        )
+    except Exception as exc:
+        return AccountValidationResult(
+            platform=platform,
+            valid=False,
+            message=str(exc),
+            checked_at=checked_at,
+        )
 
 
 async def _fetch_balance(account: LinkedAccount) -> AccountBalance:
@@ -393,6 +452,27 @@ async def list_accounts(
 ):
     rows = (await db.execute(select(LinkedAccount).where(LinkedAccount.user_id == user_id))).scalars().all()
     return rows
+
+
+@router.post("/validate", response_model=AccountValidationResult)
+async def validate_account_credentials(
+    body: AccountValidate,
+    user_id: str = Depends(get_current_user),
+):
+    """Lightweight credentials check for a platform without saving an account."""
+    if body.platform not in _SUPPORTED_PLATFORMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported platform. Supported: {', '.join(_SUPPORTED_PLATFORMS)}",
+        )
+
+    api_secret = body.api_secret or ""
+    return await _validate_credentials(
+        platform=body.platform,
+        api_key=body.api_key,
+        api_secret=api_secret,
+        extra=body.extra,
+    )
 
 
 @router.post("/accounts", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
