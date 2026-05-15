@@ -2,6 +2,7 @@
 
 @~/.claude/shared/git-workflow.md
 @~/.claude/shared/coding-conventions.md
+@~/.claude/shared/feature-tracking.md
 
 # Project Context
 Project: wealth-builder
